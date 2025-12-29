@@ -14,19 +14,21 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Use the real fasttrack_daily columns you pasted
+// One latest row per creator based on Data period then _ingested_at
 const SNAPSHOT_SQL = `
   select distinct on (creator_id)
     creator_id,
-    username       as creator_handle,
-    assigned_group as manager,
-    live_days_mtd,
-    live_hours_mtd,
-    diamonds_mtd,
-    response_status,
-    date           as data_date
+    "Creator's username" as creator_handle,
+    "group"               as manager,
+    valid_go_live_days    as live_days_mtd,
+    "LIVE streams"        as live_streams_mtd,
+    "LIVE duration"       as live_duration_raw,
+    Diamonds              as diamonds_mtd,
+    "Data period"         as data_period
   from fasttrack_daily
-  where date <= current_date - interval '1 day'
-  order by creator_id, date desc;
+  where is_demo_data is not true
+  order by creator_id, "Data period" desc, _ingested_at desc;
 `;
 
 app.get("/fasttrack/snapshot", async (req, res) => {
