@@ -14,21 +14,51 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Use the real fasttrack_daily columns, quoted where needed
-// One latest row per creator based on "Data period" then _ingested_at
+// Month to date snapshot per creator
+// Logic:
+// 1) Find latest "Data period" in fasttrack_daily (ignoring demo data)
+// 2) If latest day-of-month = 1, then report the previous calendar month
+//    else report the month of latest date
+// 3) Sum per creator across that month between month_start and month_end
 const SNAPSHOT_SQL = `
-  select distinct on (creator_id)
-    creator_id,
-    "Creator's username" as creator_handle,
-    "group"               as manager,
-    valid_go_live_days    as live_days_mtd,
-    "LIVE streams"        as live_streams_mtd,
-    "LIVE duration"       as live_duration_raw,
-    "Diamonds"            as diamonds_mtd,
-    "Data period"         as data_period
-  from fasttrack_daily
-  where is_demo_data is not true
-  order by creator_id, "Data period" desc, _ingested_at desc;
+  with latest as (
+    select max("Data period") as latest_date
+    from fasttrack_daily
+    where is_demo_data is not true
+  ),
+  month_bounds as (
+    select
+      case
+        when extract(day from latest_date) = 1
+          then (date_trunc('month', latest_date) - interval '1 month')::date
+        else
+          date_trunc('month', latest_date)::date
+      end as month_start,
+      case
+        when extract(day from latest_date) = 1
+          then (date_trunc('month', latest_date) - interval '1 day')::date
+        else
+          latest_date
+      end as month_end
+    from latest
+  )
+  select
+    f.creator_id,
+    f."Creator's username" as creator_handle,
+    f."group"              as manager,
+    sum(f.valid_go_live_days) as live_days_mtd,
+    sum(f."LIVE streams")     as live_streams_mtd,
+    sum(f."LIVE duration")    as live_duration_raw,
+    sum(f."Diamonds")         as diamonds_mtd,
+    max(f."Data period")      as data_period
+  from fasttrack_daily f
+  cross join month_bounds mb
+  where f.is_demo_data is not true
+    and f."Data period" between mb.month_start and mb.month_end
+  group by
+    f.creator_id,
+    f."Creator's username",
+    f."group";
 `;
 
 app.get("/fasttrack/snapshot", async (req, res) => {
