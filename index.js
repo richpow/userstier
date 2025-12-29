@@ -15,7 +15,13 @@ const pool = new Pool({
 });
 
 // Month to date snapshot per creator
-// Only include creators whose latest Data period equals month_end
+// Rules:
+// 1) Work out month_start and month_end from the latest Data period
+//    and only flip to the new month once we have data for the 1st.
+// 2) Only include creators whose own latest Data period equals month_end.
+// 3) live_days_mtd is count of days where LIVE duration >= 1 hour.
+// 4) live_duration_raw is sum of LIVE duration (hours).
+// 5) diamonds_mtd is sum of Diamonds.
 const SNAPSHOT_SQL = `
   with latest as (
     select max("Data period") as latest_date
@@ -50,7 +56,12 @@ const SNAPSHOT_SQL = `
     f.creator_id,
     f."Creator's username" as creator_handle,
     f."group"              as manager,
-    sum(f.valid_go_live_days) as live_days_mtd,
+    sum(
+      case
+        when f."LIVE duration" >= 1 then 1
+        else 0
+      end
+    ) as live_days_mtd,
     sum(f."LIVE streams")     as live_streams_mtd,
     sum(f."LIVE duration")    as live_duration_raw,
     sum(f."Diamonds")         as diamonds_mtd,
