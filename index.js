@@ -15,11 +15,7 @@ const pool = new Pool({
 });
 
 // Month to date snapshot per creator
-// Logic:
-// 1) Find latest "Data period" in fasttrack_daily (ignoring demo data)
-// 2) If latest day-of-month = 1, then report the previous calendar month
-//    else report the month of latest date
-// 3) Sum per creator across that month between month_start and month_end
+// Only include creators whose latest Data period equals month_end
 const SNAPSHOT_SQL = `
   with latest as (
     select max("Data period") as latest_date
@@ -41,6 +37,14 @@ const SNAPSHOT_SQL = `
           latest_date
       end as month_end
     from latest
+  ),
+  latest_creator as (
+    select
+      creator_id,
+      max("Data period") as latest_creator_date
+    from fasttrack_daily
+    where is_demo_data is not true
+    group by creator_id
   )
   select
     f.creator_id,
@@ -53,6 +57,9 @@ const SNAPSHOT_SQL = `
     max(f."Data period")      as data_period
   from fasttrack_daily f
   cross join month_bounds mb
+  join latest_creator lc
+    on lc.creator_id = f.creator_id
+   and lc.latest_creator_date = mb.month_end
   where f.is_demo_data is not true
     and f."Data period" between mb.month_start and mb.month_end
   group by
