@@ -3,6 +3,9 @@ import pkg from "pg";
 
 const { Pool } = pkg;
 
+// Log what the service actually sees for DATABASE_URL
+console.log("DATABASE_URL env:", process.env.DATABASE_URL);
+
 const app = express();
 const port = process.env.PORT || 3000;
 
