@@ -14,8 +14,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Use the real fasttrack_daily columns you pasted
-// One latest row per creator based on Data period then _ingested_at
+// Use the real fasttrack_daily columns, quoted where needed
+// One latest row per creator based on "Data period" then _ingested_at
 const SNAPSHOT_SQL = `
   select distinct on (creator_id)
     creator_id,
@@ -24,7 +24,7 @@ const SNAPSHOT_SQL = `
     valid_go_live_days    as live_days_mtd,
     "LIVE streams"        as live_streams_mtd,
     "LIVE duration"       as live_duration_raw,
-    Diamonds              as diamonds_mtd,
+    "Diamonds"            as diamonds_mtd,
     "Data period"         as data_period
   from fasttrack_daily
   where is_demo_data is not true
