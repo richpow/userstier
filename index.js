@@ -3,7 +3,6 @@ import pkg from "pg";
 
 const { Pool } = pkg;
 
-// Log what the service actually sees for DATABASE_URL
 console.log("DATABASE_URL env:", process.env.DATABASE_URL);
 
 const app = express();
@@ -14,14 +13,19 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Month to date snapshot per creator
-// Rules:
-// 1) Work out month_start and month_end from the latest Data period
-//    and only flip to the new month once we have data for the 1st.
-// 2) Only include creators whose own latest Data period equals month_end.
-// 3) live_days_mtd is count of days where LIVE duration >= 1 hour.
-// 4) live_duration_raw is sum of LIVE duration (hours).
-// 5) diamonds_mtd is sum of Diamonds.
+/*
+ Month to date snapshot per creator
+
+ Rules:
+ 1) Determine reporting month based on latest Data period
+    - If latest day is the 1st, report previous month
+    - Otherwise report current month
+ 2) Include any creator with at least one row in the month
+ 3) Valid Day = LIVE duration >= 1 hour
+ 4) LIVE duration is summed in hours
+ 5) Diamonds are summed
+*/
+
 const SNAPSHOT_SQL = `
   with latest as (
     select max("Data period") as latest_date
@@ -43,14 +47,6 @@ const SNAPSHOT_SQL = `
           latest_date
       end as month_end
     from latest
-  ),
-  latest_creator as (
-    select
-      creator_id,
-      max("Data period") as latest_creator_date
-    from fasttrack_daily
-    where is_demo_data is not true
-    group by creator_id
   )
   select
     f.creator_id,
@@ -62,15 +58,12 @@ const SNAPSHOT_SQL = `
         else 0
       end
     ) as live_days_mtd,
-    sum(f."LIVE streams")     as live_streams_mtd,
-    sum(f."LIVE duration")    as live_duration_raw,
-    sum(f."Diamonds")         as diamonds_mtd,
-    max(f."Data period")      as data_period
+    sum(f."LIVE streams")  as live_streams_mtd,
+    sum(f."LIVE duration") as live_duration_raw,
+    sum(f."Diamonds")      as diamonds_mtd,
+    max(f."Data period")   as data_period
   from fasttrack_daily f
   cross join month_bounds mb
-  join latest_creator lc
-    on lc.creator_id = f.creator_id
-   and lc.latest_creator_date = mb.month_end
   where f.is_demo_data is not true
     and f."Data period" between mb.month_start and mb.month_end
   group by
